@@ -1,0 +1,165 @@
+on:
+  release:
+    types: [published]
+name: "Publish Helm Charts"
+jobs:
+  # ---- Build Stage | SDK Matrix ----
+  sdk:
+    name: "Build | SDKs"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        sdk:
+          - parser-sdk
+          - hook-sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Docker Meta
+        id: docker_meta
+        uses: crazy-max/ghaction-docker-meta@v1
+        with:
+          images: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.sdk }}-nodejs
+          tag-sha: true
+          tag-semver: |
+            {{ version }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and Push
+        uses: docker/build-push-action@v2
+        with:
+          context: ./${{ matrix.sdk }}/nodejs
+          file: ./${{ matrix.sdk }}/nodejs/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
+  # ---- Build Stage | Scaner Matrix ----
+  scanner-image:
+    name: "Build Scanners"
+    needs:
+      - sdk
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        unit:
+          - amass
+          - angularjs-csti-scanner
+          - git-repo-scanner
+          - gitleaks
+          - kube-hunter
+          - kubeaudit
+          - ncrack
+          - nmap
+          - screenshooter
+          - ssh-scan
+          - sslyze
+          - test-scan
+          - trivy
+          - wpscan
+          - zap
+          - zap-advanced
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set baseImageTag To commit Hash
+        run: |
+          echo "baseImageTag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Set ENV Var with Scanner Version
+        uses: mikefarah/yq@v4.4.1
+        # Notice: The current version of the scanner is provided via the Chart.yaml to ensure
+        # there is only one place to edit the version of a scanner
+        with:
+          cmd: echo scannerVersion=$(yq e .appVersion scanners/${{ matrix.scanner }}/Chart.yaml) >> $GITHUB_ENV
+
+      # Decide which Docker Meta job to run based on whether this scanner is a third party scanner, whose tag should be the Chart's appVersion
+      - name: Docker Meta
+        id: docker_meta_scanner
+        if: hashFiles(format('./scanners/{0}/scanner/Dockerfile', matrix.unit)) != ''
+        uses: crazy-max/ghaction-docker-meta@v1
+        with:
+          images: ${{ env.DOCKER_NAMESPACE }}/scanner-${{ matrix.scanner }}
+          tag-sha: true
+          tag-custom-only: true
+          tag-custom: ${{ env.scannerVersion }}
+
+      - name: Docker Meta
+        id: docker_meta
+        uses: crazy-max/ghaction-docker-meta@v1
+        with:
+          images: ${{ env.DOCKER_NAMESPACE }}/parser-${{ matrix.unit }}
+          tag-sha: true
+          tag-semver: |
+            {{ version }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build Parser
+        uses: docker/build-push-action@v2
+        # Only if this scanner builds its own parser
+        if: hashFiles(format('./scanners/{0}/parser/Dockerfile', matrix.unit)) != ''
+        with:
+          context: ./scanners/${{ matrix.unit }}/parser/
+          file: ./scanners/${{ matrix.unit }}/parser/Dockerfile
+          load: true
+          build-args: |
+            namespace=${{ env.DOCKER_NAMESPACE }}
+            baseImageTag=${{ env.baseImageTag }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
+
+      - name: Build Scanner
+        uses: docker/build-push-action@v2
+        # Only if this scanner builds its own scanner
+        if: hashFiles(format('./scanners/{0}/scanner/Dockerfile', matrix.unit)) != ''
+        with:
+          context: ./scanners/${{ matrix.unit }}/parser/
+          file: ./scanners/${{ matrix.unit }}/parser/Dockerfile
+          build-args: |
+            scannerVersion=${{ env.scannerVersion }}
+            namespace=${{ env.DOCKER_NAMESPACE }}
+            baseImageTag=${{ env.baseImageTag }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.docker_meta_scanner.outputs.tags }}
+          labels: ${{ steps.docker_meta_scanner.outputs.labels }}
+
+      - name: Update Docker Hub Parser Description
+        # Only if this scanner builds its own parser
+        if: hashFiles(format('./scanners/{0}/parser/Dockerfile', matrix.unit)) != ''
+        uses: peter-evans/dockerhub-description@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          repository: ${{ env.DOCKER_NAMESPACE }}/parser-${{ matrix.unit }}
+          readme-filepath: ./scanners/${{ matrix.unit }}/docs/README.DockerHub-Parser.md
+
+      - name: Update Docker Hub Scanner Description
+        uses: peter-evans/dockerhub-description@v2
+        # Only if this scanner builds its own scanner
+        if: hashFiles(format('./scanners/{0}/scanner/Dockerfile', matrix.unit)) != ''
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          repository: ${{ env.DOCKER_NAMESPACE }}/scanner-${{ matrix.unit }}
+          readme-filepath: ./scanners/${{ matrix.unit }}/docs/README.DockerHub-Scanner.md
