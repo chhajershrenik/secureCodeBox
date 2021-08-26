@@ -352,6 +352,7 @@ jobs:
           echo "baseImageTag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Build Images
+        working-directory: ./scanners/${{ matrix.unit }}/
         run: make docker-build
 
       - name: Export Docker Images
