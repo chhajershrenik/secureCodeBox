@@ -798,18 +798,22 @@ jobs:
           # Install nmap
           helm -n cascading-tests install nmap ./scanners/nmap/ \
             --set="scanner.image.repository=docker.io/${{ env.DOCKER_NAMESPACE }}/scanner-nmap" \
-            --set="scanner.image.tag=sha-$(git rev-parse --short HEAD)" \
+            # todo: change this back to use the current git commit rather then main
+            --set="scanner.image.tag=main" \
             --set="parser.image.repository=docker.io/${{ env.DOCKER_NAMESPACE }}/parser-nmap" \
-            --set="parser.image.tag=sha-$(git rev-parse --short HEAD)"
+            # todo: change this back to use the current git commit rather then main
+            --set="parser.image.tag=main"
           # Install ncrack
           printf "root\nadmin\n" > users.txt
           printf "THEPASSWORDYOUCREATED\n123456\npassword\n" > passwords.txt
           kubectl create secret generic --from-file users.txt --from-file passwords.txt ncrack-lists -n cascading-tests
           cat <<EOF | helm -n cascading-tests install ncrack ./scanners/ncrack \
             --set="scanner.image.repository=docker.io/${{ env.DOCKER_NAMESPACE }}/scanner-ncrack" \
-            --set="scanner.image.tag=sha-$(git rev-parse --short HEAD)" \
+            # todo: change this back to use the current git commit rather then main
+            --set="scanner.image.tag=main" \
             --set="parser.image.repository=docker.io/${{ env.DOCKER_NAMESPACE }}/parser-ncrack" \
-            --set="parser.image.tag=sha-$(git rev-parse --short HEAD)" \
+            # todo: change this back to use the current git commit rather then main
+            --set="parser.image.tag=main" \
             --values -
           scanner:
             extraVolumes:
@@ -843,13 +847,16 @@ jobs:
           # Install nmap
           helm -n cascading-tests install nmap ./scanners/nmap/ --wait \
             --set="scanner.image.repository=docker.io/${{ env.DOCKER_NAMESPACE }}/scanner-nmap" \
-            --set="scanner.image.tag=sha-$(git rev-parse --short HEAD)" \
+            # todo: change this back to use the current git commit rather then main
+            --set="scanner.image.tag=main" \
             --set="parser.image.repository=docker.io/${{ env.DOCKER_NAMESPACE }}/parser-nmap" \
-            --set="parser.image.tag=sha-$(git rev-parse --short HEAD)"
+            # todo: change this back to use the current git commit rather then main
+            --set="parser.image.tag=main"
           # Install sslyze
           helm -n cascading-tests install sslyze ./scanners/sslyze/ --wait \
             --set="parser.image.repository=docker.io/${{ env.DOCKER_NAMESPACE }}/parser-sslyze" \
-            --set="parser.image.tag=sha-$(git rev-parse --short HEAD)"
+            # todo: change this back to use the current git commit rather then main
+            --set="parser.image.tag=main"
           # Actually run the tests
           cd tests/integration/
           npx jest --ci --color scanner/cascade-nmap-sslyze.test.js
