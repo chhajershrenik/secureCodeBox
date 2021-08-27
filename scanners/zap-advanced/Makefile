@@ -35,3 +35,7 @@ deploy-with-scanner:
 		--set="scanner.image.tag=$(IMG_TAG)"
 
 deploy-test-deps: deploy-test-dep-nginx deploy-test-dep-bodgeit deploy-test-dep-juiceshop deploy-test-dep-petstore
+
+# Uncomment overwrite to run the tests locally
+integration-tests:
+	@echo ".: 🚨⏭ Skipped as they are too slow for the pipeline. Should be re-enabled once we have a way to run this only on code changes."
