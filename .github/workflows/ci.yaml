@@ -687,19 +687,6 @@ jobs:
           kubectl create deployment --image nginx:alpine nginx --namespace demo-targets
           kubectl expose deployment nginx --port 80 --namespace demo-targets
 
-      # ---- Nikto Integration Tests ----
-
-      - name: "nikto Integration Tests"
-        run: |
-          kubectl -n integration-tests delete scans --all
-          helm -n integration-tests install nikto ./scanners/nikto/ \
-            --set="scanner.image.repository=docker.io/${{ env.DOCKER_NAMESPACE }}/scanner-nikto" \
-            --set="scanner.image.tag=sha-$(git rev-parse --short HEAD)" \
-            --set="parser.image.repository=docker.io/${{ env.DOCKER_NAMESPACE }}/parser-nikto" \
-            --set="parser.image.tag=sha-$(git rev-parse --short HEAD)"
-          cd tests/integration/
-          npx jest --ci --color scanner/nikto.test.js
-
       # ---- Notification Hook Tests ----
 
       - name: "Notification Hook Tests"
